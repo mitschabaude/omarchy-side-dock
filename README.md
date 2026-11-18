@@ -5,6 +5,8 @@ GNOME dock: favourite apps plus every running app, one click to jump to it. It
 sits on any screen edge, on every workspace, and keeps working in tiling and
 scrolling layouts.
 
+![The dock on the right edge of the screen, with running dots, the hover highlight and a label](docs/side-dock.jpg)
+
 It is a fork of Omarchy's own dock (`omarchy.dock`). Omarchy's dock only
 appears on floating workspaces, because a tiled workspace is expected to lay
 windows out by itself. Without a dock, though, apps like Slack, Telegram and
