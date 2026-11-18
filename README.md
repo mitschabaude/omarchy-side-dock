@@ -5,7 +5,7 @@ GNOME dock: favourite apps plus every running app, one click to jump to it. It
 sits on any screen edge, on every workspace, and keeps working in tiling and
 scrolling layouts.
 
-![The dock on the right edge of the screen, with running dots, the hover highlight and a label](docs/side-dock.jpg)
+![The dock on the right edge of the screen, with running dots, the hover highlight and a label](preview.jpg)
 
 It is a fork of Omarchy's own dock (`omarchy.dock`). Omarchy's dock only
 appears on floating workspaces, because a tiled workspace is expected to lay
@@ -13,7 +13,8 @@ windows out by itself. Without a dock, though, apps like Slack, Telegram and
 Spotify sit on some workspace with no hint of where to find them.
 
 Made for Omarchy 4 (its Quickshell shell and Hyprland's Lua config); tested
-with Omarchy 4.0.0.alpha, Hyprland 0.57.1 and Quickshell 0.3.2.
+with Omarchy 4.0.0.alpha, Hyprland 0.57.1 and Quickshell 0.3.2. It needs
+nothing beyond Omarchy itself; only the tests need a few tools (see Testing).
 
 ## Install
 
@@ -26,8 +27,8 @@ clone of it. Everything that talks to Omarchy's dock talks to this one instead:
 Super+Alt+Space (the app grid), `omarchy dock position|autohide|pinned`, and
 the Appearance menu.
 
-Update with `omarchy plugin update side-dock`. To go back to Omarchy's dock,
-run `omarchy plugin remove side-dock`.
+Update with `omarchy plugin update mitschabaude.side-dock`. To go back to
+Omarchy's dock, run `omarchy plugin remove mitschabaude.side-dock`.
 
 ## Settings
 
