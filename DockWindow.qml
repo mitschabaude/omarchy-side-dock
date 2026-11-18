@@ -37,7 +37,8 @@ PanelWindow {
     }
     return mode
   }
-  readonly property bool shown: !!dock && dock.isFloating(workspaceId) && fullscreenMode < 2
+  // Local change: show on every workspace, not just floating ones.
+  readonly property bool shown: !!dock && fullscreenMode < 2
   // With auto-hide on, the dock waits off screen until the pointer reaches its
   // edge, and stays while the pointer, a menu, or a drag still needs it. A
   // maximized window hides the dock the same way, so it can still be called up.
@@ -48,7 +49,11 @@ PanelWindow {
   readonly property bool contentShown: shown && !tucked
 
   readonly property int gap: Style.spacing.xs
-  readonly property int iconSize: Math.round(36 * Style.fontScale)
+  // Local change: 30 instead of 36, for a slimmer dock.
+  readonly property int iconSize: Math.round(30 * Style.fontScale)
+  // Local change: the padding around an icon in Ubuntu's dock (6 px at its
+  // 36 px icons), which places the running dots and the focus highlight.
+  readonly property real iconBoxPadding: iconSize * 6 / 36
   // Each app has a square slot with its icon in the middle, and the slots run
   // straight to the edge of the dock.
   readonly property int iconInset: Style.spacing.md
@@ -172,6 +177,45 @@ PanelWindow {
     if (window.autohide) hideTimer.restart()
   }
 
+  // Local change: GNOME's dock labels (Dash._syncLabel in GNOME Shell 46). A
+  // label shows after the pointer rests on an item for 300 ms. Once one has
+  // shown, the next item's label shows at once, until the pointer has been
+  // off the items for another 300 ms.
+  property Item labelSlot: null
+  property Item labelPending: null
+  property bool labelShowing: false
+
+  function syncLabel(slot, hovered) {
+    if (hovered) {
+      window.labelPending = slot
+      labelReset.stop()
+      labelDelay.interval = window.labelShowing ? 0 : 300
+      labelDelay.restart()
+      return
+    }
+    if (window.labelPending === slot) {
+      labelDelay.stop()
+      window.labelPending = null
+    }
+    if (window.labelSlot === slot) window.labelSlot = null
+    if (window.labelShowing && !window.labelPending) labelReset.restart()
+  }
+
+  Timer {
+    id: labelDelay
+    onTriggered: {
+      window.labelShowing = true
+      window.labelSlot = window.labelPending
+      window.labelPending = null
+    }
+  }
+
+  Timer {
+    id: labelReset
+    interval: 300
+    onTriggered: window.labelShowing = false
+  }
+
   // Places the menu inward of the dock, centered on a slot.
   function popupX(slot, popup) {
     if (!slot) return 0
@@ -196,7 +240,9 @@ PanelWindow {
   // Kept clear of the bar's reserved edge, without reserving one of its own:
   // floating windows go where they are put.
   exclusionMode: ExclusionMode.Normal
-  exclusiveZone: 0
+  // Local change: reserve the dock's strip so tiled windows sit beside it,
+  // unless it auto-hides.
+  exclusiveZone: shown && !autohide ? gap + slotSize : 0
 
   anchors {
     top: window.position !== "bottom"
@@ -325,6 +371,10 @@ PanelWindow {
     property bool hovered: mouse.containsMouse && !window.hoverStale && !window.dragging
     property bool pressed: mouse.pressed
     property alias mouse: mouse
+    // Local change: the name shown in the hover label.
+    property string label: ""
+
+    onHoveredChanged: window.syncLabel(slot, hovered)
 
     width: window.slotSize
     height: window.slotSize
@@ -362,6 +412,22 @@ PanelWindow {
       if (window.dock) window.dock.openApps()
     }
 
+    // Local change: GNOME's "Show Apps" label, and its hover highlight in
+    // place of the stock dock's growing icon.
+    label: "Show Apps"
+
+    Rectangle {
+      opacity: appsSlot.hovered ? 1 : 0
+      visible: opacity > 0
+      Behavior on opacity { NumberAnimation { duration: 100 } }
+      x: window.iconInset - window.iconBoxPadding
+      y: window.iconInset - window.iconBoxPadding
+      width: window.iconSize + 2 * window.iconBoxPadding
+      height: width
+      radius: window.iconSize * 12 / 36
+      color: Qt.rgba(238 / 255, 238 / 255, 238 / 255, 0.2)
+    }
+
     // A grid of app squares reads as "all apps" in any icon theme. Drawn
     // rather than taken from a font, so its edges stay crisp on the
     // transparent dock and it fills its slot like the app icons beside it.
@@ -370,10 +436,6 @@ PanelWindow {
       y: window.iconInset
       width: window.iconSize
       height: window.iconSize
-      scale: appsSlot.hovered ? 1.15 : 1
-      transformOrigin: window.popOrigin
-
-      Behavior on scale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
 
       Grid {
         readonly property int square: Math.round(window.iconSize * 0.22)
@@ -487,6 +549,38 @@ PanelWindow {
       else window.dock.activate(appSlot.modelData)
     }
 
+    // Local change: the app holding focus, and the one under the pointer, get
+    // Ubuntu's highlight: a rounded box behind the icon (radius 12 at 36 px
+    // icons, white at 20 %) that fades in and out over 100 ms.
+    readonly property bool focused: !!modelData && modelData.windows.some(function(entry) {
+      return !!entry.toplevel && entry.toplevel.activated
+    })
+
+    label: {
+      // Local change: `dock.labels` in shell.json renames an app by desktop
+      // id, for names an app keeps rewriting in its own desktop file.
+      var labels = window.dock && window.dock.dockConfig ? window.dock.dockConfig.labels : null
+      if (labels && typeof labels[key] === "string") return labels[key]
+      var entry = window.dock && modelData ? window.dock.entryFor(modelData) : null
+      return entry && entry.name ? entry.name : String(key || "")
+    }
+
+    Rectangle {
+      opacity: appSlot.focused || appSlot.hovered ? 1 : 0
+      visible: opacity > 0
+      Behavior on opacity { NumberAnimation { duration: 100 } }
+      x: window.iconInset - window.iconBoxPadding
+      y: window.iconInset - window.iconBoxPadding
+      width: window.iconSize + 2 * window.iconBoxPadding
+      height: width
+      radius: window.iconSize * 12 / 36
+      color: Qt.rgba(238 / 255, 238 / 255, 238 / 255, 0.2)
+      transform: Translate {
+        x: window.vertical ? 0 : appSlot.displayedShift
+        y: window.vertical ? appSlot.displayedShift : 0
+      }
+    }
+
     // Running apps are drawn in full, pinned ones that are not running faded,
     // and one that is starting pulses between the two.
     Image {
@@ -505,10 +599,58 @@ PanelWindow {
         x: window.vertical ? 0 : appSlot.displayedShift
         y: window.vertical ? appSlot.displayedShift : 0
       }
-      scale: appSlot.lifted || appSlot.hovered ? 1.15 : 1
+      // Local change: only a dragged icon lifts; hovering highlights instead.
+      scale: appSlot.lifted ? 1.15 : 1
       transformOrigin: window.popOrigin
 
       Behavior on scale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
+    }
+
+    // Local change: running dots as Ubuntu 24.04's dock draws them (its DOTS
+    // style with the Yaru theme), scaled from its 36 px icons. There the icon
+    // sits in a box with 6 px padding; each window adds a dot, up to four, of
+    // radius box / 22, half a dot apart, inside the box. Ubuntu puts them on
+    // the screen-edge side; here they face the windows instead (left of the
+    // icons on a right-hand dock). Ubuntu fills them with its accent; this
+    // uses the theme's.
+    Item {
+      id: windowDots
+
+      readonly property real box: window.iconSize + 2 * window.iconBoxPadding
+      readonly property real radius: box / 22
+      readonly property int count: Math.min(4, appSlot.windowCount)
+      readonly property real length: count * 2 * radius + (count - 1) * radius
+
+      visible: count > 0
+      width: window.vertical ? 2 * radius : length
+      height: window.vertical ? length : 2 * radius
+      x: window.position === "right" ? window.iconInset - window.iconBoxPadding
+        : window.position === "left" ? window.iconInset + window.iconSize + window.iconBoxPadding - width
+        : (appSlot.width - width) / 2
+      y: window.position === "bottom" ? window.iconInset - window.iconBoxPadding
+        : window.position === "top" ? window.iconInset + window.iconSize + window.iconBoxPadding - height
+        : (appSlot.height - height) / 2
+      transform: Translate {
+        x: window.vertical ? 0 : appSlot.displayedShift
+        y: window.vertical ? appSlot.displayedShift : 0
+      }
+
+      Repeater {
+        model: windowDots.count
+
+        delegate: Rectangle {
+          required property int index
+          readonly property real offset: index * 3 * windowDots.radius
+
+          x: window.vertical ? 0 : offset
+          y: window.vertical ? offset : 0
+          width: 2 * windowDots.radius
+          height: 2 * windowDots.radius
+          radius: windowDots.radius
+          color: Commons.Color.accent
+          antialiasing: true
+        }
+      }
     }
 
     // With animations off it holds still rather than spinning through
@@ -520,6 +662,68 @@ PanelWindow {
 
       NumberAnimation { target: appSlot; property: "pulse"; from: 1; to: window.idleOpacity; duration: Style.duration(500); easing.type: Easing.InOutSine }
       NumberAnimation { target: appSlot; property: "pulse"; to: 1; duration: Style.duration(500); easing.type: Easing.InOutSine }
+    }
+  }
+
+  // Local change: the hover label, shaped like GNOME's dash label (a pill with
+  // 6 x 12 px padding and a 1 px border, 10 px from the item, centred on it)
+  // in the theme's tooltip colours. It fades in over 150 ms and out over
+  // 100 ms, where it was. The window's input mask leaves it out, so it never
+  // catches the pointer.
+  Rectangle {
+    id: hoverLabel
+
+    readonly property bool shown: !!window.labelSlot && !window.menuOpen && !window.dragging
+    readonly property int offset: 10
+    property string text: ""
+    property real slotX: 0
+    property real slotY: 0
+    property real slotSize: 0
+
+    function follow() {
+      var slot = window.labelSlot
+      if (!slot) return
+      var at = slot.mapToItem(window.contentItem, 0, 0)
+      hoverLabel.text = slot.label
+      hoverLabel.slotX = at.x
+      hoverLabel.slotY = at.y
+      hoverLabel.slotSize = slot.width
+    }
+
+    Connections {
+      target: window
+      function onLabelSlotChanged() { hoverLabel.follow() }
+    }
+
+    width: Math.min(labelText.implicitWidth + 2 * 12 + 2, Math.max(0, window.vertical ? window.width - slotSize - offset : window.width))
+    height: labelText.implicitHeight + 2 * 6 + 2
+    radius: height / 2
+    color: Commons.Color.tooltip.background
+    border.width: 1
+    border.color: Commons.Color.tooltip.border
+    x: window.position === "right" ? Math.max(0, slotX - offset - width)
+      : window.position === "left" ? slotX + slotSize + offset
+      : Math.max(0, Math.min(window.width - width, slotX + (slotSize - width) / 2))
+    y: window.position === "bottom" ? slotY - offset - height
+      : window.position === "top" ? slotY + slotSize + offset
+      : slotY + (slotSize - height) / 2
+    visible: opacity > 0
+    opacity: shown ? 1 : 0
+
+    Behavior on opacity {
+      NumberAnimation { duration: hoverLabel.shown ? 150 : 100; easing.type: Easing.OutQuad }
+    }
+
+    Text {
+      id: labelText
+      anchors.centerIn: parent
+      width: Math.min(implicitWidth, parent.width - 2 * 12 - 2)
+      text: hoverLabel.text
+      elide: Text.ElideRight
+      textFormat: Text.PlainText
+      color: Commons.Color.tooltip.text
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
     }
   }
 

@@ -1,4 +1,11 @@
+MIT License
+
 Copyright (c) David Heinemeier Hansson
+Copyright (c) 2026 omarchy-side-dock contributors
+
+This project is a fork of the dock in Omarchy
+(https://github.com/omacom/omarchy, shell/plugins/dock), which is licensed
+under the MIT License with the copyright notice above.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

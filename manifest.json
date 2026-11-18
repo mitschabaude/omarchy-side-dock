@@ -1,14 +1,17 @@
 {
   "schemaVersion": 1,
-  "id": "omarchy.dock",
-  "name": "Dock",
+  "id": "side-dock",
+  "name": "Side Dock",
   "version": "1.0.0",
-  "author": "Omarchy",
-  "description": "App dock shown on floating workspaces",
+  "author": "omarchy-side-dock contributors",
+  "description": "GNOME-style dock on every workspace, based on Omarchy's dock",
   "kinds": [
     "service"
   ],
   "entryPoints": {
     "service": "Dock.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.dock"
   }
 }

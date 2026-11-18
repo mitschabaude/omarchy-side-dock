@@ -14,8 +14,41 @@ Item {
   property var shell: null
   property var manifest: null
 
-  readonly property var appLibrary: shell ? shell.appLibrary : null
-  readonly property var dockConfig: shell && shell.shellConfig && shell.shellConfig.dock ? shell.shellConfig.dock : ({})
+  // Local change: the shell hands its app library only to plugins of the "menu"
+  // kind, so a clone gets none, and its app grid would list no apps. The clone
+  // runs its own instance of Omarchy's library, loaded from the shell's
+  // services folder, so the grid, its search and launching work as stock and
+  // follow Omarchy's updates.
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
+  property var ownAppLibrary: null
+  readonly property var appLibrary: shell && shell.appLibrary ? shell.appLibrary : ownAppLibrary
+  function loadAppLibrary() {
+    if (ownAppLibrary || (shell && shell.appLibrary)) return
+    var component = Qt.createComponent("file://" + omarchyPath + "/shell/services/AppLibrary.qml")
+    if (component.status === Component.Ready) ownAppLibrary = component.createObject(root)
+    else console.warn("dock: could not load Omarchy's app library: " + component.errorString())
+  }
+  // The shell sets shell and omarchyPath right after creating the dock.
+  Timer { interval: 0; running: true; onTriggered: root.loadAppLibrary() }
+  // Local change: a cloned plugin is not handed shell.shellConfig, so read the
+  // dock section of shell.json directly and follow edits to it.
+  readonly property var dockConfig: {
+    try {
+      var parsed = JSON.parse(userConfigFile.text() || "{}")
+      return parsed && parsed.dock ? parsed.dock : ({})
+    } catch (e) {
+      return ({})
+    }
+  }
+  FileView {
+    id: userConfigFile
+    path: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omarchy/shell.json"
+    watchChanges: true
+    onFileChanged: reload()
+  }
+  // Local change: show the dock only on the monitors in dock.monitors (missing
+  // or empty: all of them).
+  readonly property var dockScreens: Array.isArray(dockConfig.monitors) ? dockConfig.monitors.map(String) : []
   readonly property var defaultDockConfig: shell && shell.defaultsConfig && shell.defaultsConfig.dock ? shell.defaultsConfig.dock : ({})
   readonly property string position: DockModel.normalizePosition(dockConfig.position)
   readonly property bool vertical: DockModel.isVertical(position)
@@ -68,9 +101,12 @@ Item {
       var workspace = toplevels[i].workspace
       windows.push({
         key: entry ? entry.id : toplevel.appId,
-        hasEntry: !!entry && !entry.noDisplay,
+        // Local change: a pinned entry claims its windows even when it is
+        // hidden from the launcher (T3 Code's com.t3tools.T3Code is NoDisplay).
+        hasEntry: !!entry && (!entry.noDisplay || pinned.indexOf(entry.id) >= 0),
         workspaceId: workspace ? workspace.id : -1,
         minimized: !!workspace && DockModel.isMinimizedWorkspace(workspace.name),
+        special: !!workspace && String(workspace.name || "").indexOf("special:") === 0,
         address: toplevels[i].address,
         toplevel: toplevel
       })
@@ -167,7 +203,8 @@ Item {
   }
 
   function launchEntry(entry) {
-    if (entry && root.appLibrary) root.appLibrary.launch(entry.id, entry.name)
+    if (!entry) return
+    root.appLibrary.launch(entry.id, entry.name)
   }
 
   function activate(item) {
@@ -207,10 +244,30 @@ Item {
     }
     steps.push("hl.dsp.focus({ " + target + " })")
     steps.push("hl.dsp.window.alter_zorder({ mode = \"top\", " + target + " })")
-    var dispatch = function(step) { return "hyprctl dispatch " + Util.shellQuote(step) }
-    var command = steps.map(dispatch).join(" && ")
-    if (after.length > 0) command += "; sleep 0.4; " + after.map(dispatch).join("; ")
-    Util.execDetached(command)
+    // Local change: send the Lua dispatches over Hyprland's socket in-process
+    // instead of spawning a login shell running hyprctl for every click. They
+    // run as one Lua function with cursor warps off, so the pointer stays on
+    // the dock instead of jumping to the focused window or workspace; the
+    // warp settings are restored even if a step fails.
+    Hyprland.dispatch("function() "
+      + "local saved = { no_warps = hl.get_config(\"cursor.no_warps\"), "
+      + "warp_on_change_workspace = hl.get_config(\"cursor.warp_on_change_workspace\") }; "
+      + "hl.config({ cursor = { no_warps = true, warp_on_change_workspace = 0 } }); "
+      + "pcall(function() " + steps.map(function(step) { return "hl.dispatch(" + step + ")" }).join("; ") + " end); "
+      + "hl.config({ cursor = saved }) end")
+    if (after.length > 0) {
+      afterBringForward.steps = after
+      afterBringForward.restart()
+    }
+  }
+
+  Timer {
+    id: afterBringForward
+    property var steps: []
+    interval: 400
+    onTriggered: {
+      for (var i = 0; i < steps.length; i++) Hyprland.dispatch(steps[i])
+    }
   }
 
   function quit(item) {
@@ -244,7 +301,11 @@ Item {
   // A reorder shows at once; the saved config catches up after.
   function savePins(pins) {
     root.pendingPins = pins
-    Util.execDetached("omarchy-dock pinned " + pins.map(function(id) { return Util.shellQuote(id) }).join(" "))
+    // Local change: save every pin as "<id>.desktop". Both omarchy-dock and
+    // DockModel.normalizeId strip one ".desktop", so an id that itself ends in
+    // ".desktop" (Telegram's org.telegram.desktop) was cut down to one that
+    // does not exist. Passing two suffixes stores one, which reads back intact.
+    Util.execDetached("omarchy-dock pinned " + pins.map(function(id) { return Util.shellQuote(id + ".desktop.desktop") }).join(" "))
   }
 
   function moveItem(fromIndex, toIndex) {
@@ -264,8 +325,8 @@ Item {
     if (pinned) {
       root.placeAt(key, root.shownKeys().length)
     } else {
-      root.pendingPins = root.pinnedKeys.filter(function(other) { return other !== key })
-      Util.execDetached("omarchy-dock unpin " + Util.shellQuote(key))
+      // Local change: save the remaining pins, for the suffix handling above.
+      root.savePins(root.pinnedKeys.filter(function(other) { return other !== key }))
     }
   }
 
@@ -383,7 +444,9 @@ Item {
 
   Variants {
     id: docks
-    model: Quickshell.screens
+    model: Quickshell.screens.filter(function(screen) {
+      return root.dockScreens.length === 0 || root.dockScreens.indexOf(screen.name) >= 0
+    })
 
     delegate: Component {
       DockWindow {

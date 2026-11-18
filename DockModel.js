@@ -30,14 +30,15 @@ function pinnedIds(dockConfig, defaultsConfig) {
   return ids
 }
 
-// Only app windows on regular workspaces belong in the dock. Helpers without a
-// visible desktop entry, such as the agent window, and anything parked on a
-// special workspace, such as the scratchpad, stay out of it. A minimized window
-// always belongs, entry or not, since the dock is the only way back to it.
+// Only app windows belong in the dock. Helpers without a visible desktop
+// entry, such as the agent window, stay out of it. A minimized window always
+// belongs, entry or not, since the dock is the only way back to it.
+// Local change: windows on special workspaces, such as the scratchpad, belong
+// like any other; the stock dock left them out.
 function isDockWindow(window) {
   if (!window || !window.key) return false
   if (window.minimized === true) return true
-  return window.hasEntry === true && window.workspaceId >= 1
+  return window.hasEntry === true && (window.workspaceId >= 1 || window.special === true)
 }
 
 // Minimizing moves a window to this special workspace, and the dock brings it
