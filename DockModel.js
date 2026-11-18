@@ -76,9 +76,12 @@ function claimingEntryId(appId, entries) {
 // that are not pinned follow in the order their first window appeared. Each
 // window is { key, hasEntry, workspaceId, ... } where key is the desktop id of
 // the entry that claims it.
+// Local change: the lookups here have no prototype. A key is a window's app
+// id when no entry claims the window, and the app picks it: an id such as
+// "constructor" would otherwise find Object's own property.
 function buildItems(pinned, windows) {
   var items = []
-  var byKey = {}
+  var byKey = Object.create(null)
 
   function itemFor(key, isPinned) {
     if (!byKey[key]) {
@@ -105,10 +108,10 @@ function buildItems(pinned, windows) {
 // joins goes at the end. Items the order does not know yet follow in the order
 // buildItems gave them.
 function orderItems(items, order) {
-  var byKey = {}
+  var byKey = Object.create(null)
   for (var i = 0; i < (items || []).length; i++) byKey[items[i].key] = items[i]
   var result = []
-  var placed = {}
+  var placed = Object.create(null)
   for (var j = 0; j < (order || []).length; j++) {
     var key = order[j]
     if (byKey[key] && !placed[key]) {
@@ -195,9 +198,11 @@ if (typeof module !== "undefined") {
 // name. The id is whatever the app chose, and the app library reads a path or
 // URL as a file, which could be one that blocks when opened (a FIFO, a device)
 // and stall the shell's shared image loader. Icon names have no slashes or
-// colons; anything else gets the generic icon.
+// colons; anything else gets the generic icon. So does an id that is a
+// property every object has ("constructor"): the app library looks names up
+// in a plain object and would find that property instead of an icon.
 function iconNameForAppId(appId) {
   var id = String(appId || "")
-  if (id.length === 0 || /[\/:]/.test(id)) return "application-x-executable"
+  if (id.length === 0 || /[\/:]/.test(id) || id in Object.prototype) return "application-x-executable"
   return id
 }

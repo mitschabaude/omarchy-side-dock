@@ -46,6 +46,14 @@ shell_pid=$(pgrep -f "^quickshell -p $XDG_RUNTIME_DIR/side-dock-test/shell/shell
 check "A minimized window whose app id names a blocking file doesn't block the dock" 0 \
   "$(cat /proc/"$shell_pid"/task/*/wchan 2>/dev/null | tr '\0' '\n' | grep -c wait_for_partner)"
 
+# The dock looks items up by key, the app id for a window without an entry. An
+# id that every JavaScript object already has as a property (constructor,
+# toString) must still make an item of its own, not break building the dock.
+d hyprctl dispatch "hl.dsp.exec_cmd(\"foot --app-id constructor -e sh -c 'sleep 600'\", { workspace = \"special:minimized silent\" })" >/dev/null
+sleep 2
+check "A minimized window whose app id is an object property doesn't break the dock" "" \
+  "$(grep -m1 -oE '(TypeError|ReferenceError)[^"]*' "$log")"
+
 "$desktop" dock apps >/dev/null
 sleep 1.5
 check "The app grid opens on that monitor" TEST-A "$(monitors_with omarchy-dock-apps)"

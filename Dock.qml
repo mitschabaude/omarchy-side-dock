@@ -115,8 +115,9 @@ Item {
     return DockModel.orderItems(DockModel.buildItems(pinned, windows), root.order)
   }
 
+  // Local change: no prototype, as in DockModel.buildItems.
   readonly property var itemsByKey: {
-    var byKey = {}
+    var byKey = Object.create(null)
     for (var i = 0; i < root.items.length; i++) byKey[root.items[i].key] = root.items[i]
     return byKey
   }
@@ -155,7 +156,8 @@ Item {
 
   // An app launched from the dock pulses its dot until a new window of it
   // shows up, or for ten seconds if none does.
-  property var launches: ({})
+  // Local change: no prototype, as in DockModel.buildItems.
+  property var launches: Object.create(null)
   readonly property int launchTimeout: 10000
 
   function isLaunching(key) {
@@ -163,7 +165,7 @@ Item {
   }
 
   function settleLaunches() {
-    var next = {}
+    var next = Object.create(null)
     var changed = false
     var now = Date.now()
     for (var key in root.launches) {
@@ -198,7 +200,7 @@ Item {
   function launch(item) {
     var entry = entryFor(item)
     if (!entry) return
-    var next = Object.assign({}, root.launches)
+    var next = Object.assign(Object.create(null), root.launches)
     next[item.key] = { at: Date.now(), windows: item.windows.length }
     root.launches = next
     root.launchEntry(entry)

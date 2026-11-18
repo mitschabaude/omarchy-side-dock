@@ -127,6 +127,12 @@ shows them all.
   icon. The app id is whatever the app chose, and the app library reads one
   that looks like a path or URL as a file: a FIFO or device there would stall
   the shell's shared image loader. Such an id now gets the generic app icon.
+- **App ids are never mistaken for object properties.** The dock looks its
+  items up by key in plain JavaScript objects, and a window's key is its app
+  id when no desktop entry claims it. An id such as `constructor` found the
+  property every object has, so building the dock threw and it stopped
+  updating while that window stayed minimized. The lookups now have no
+  prototype, and such an id also gets the generic icon.
 - **Scratchpad windows count.** Omarchy's dock leaves windows on special
   workspaces out. Here they get dots like any other, and clicking the icon
   opens the scratchpad with that window focused; clicking another app closes
@@ -161,8 +167,8 @@ tests/app-grid.sh foot
 ```
 
 It checks that the dock shows only on the monitor in `monitors`, that a
-minimized window whose app id names a FIFO doesn't block the dock, that the
-grid opens there, and that the dock loaded Omarchy's app library.
+minimized window whose app id names a FIFO doesn't block the dock, nor one
+whose app id is `constructor` break it, that the grid opens there, and that the dock loaded Omarchy's app library.
 `tests/hidden-desktop.sh` does the setup: a second Hyprland with its own
 D-Bus, drawing only to two virtual monitors (`TEST-A`, `TEST-B`) from a window
 on a hidden special workspace, with the dock running in a Quickshell of its own
