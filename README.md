@@ -122,6 +122,11 @@ shows them all.
   theme's tooltip colours. The apps button reads "Show Apps".
 - **Label overrides.** The `labels` setting. T3 Code, for example, rewrites
   its own desktop file (named "T3 Code (Beta)") while it runs.
+- **App ids are never read as files.** A minimized window shows in the dock
+  even without a desktop entry, and Omarchy's dock then uses its app id as the
+  icon. The app id is whatever the app chose, and the app library reads one
+  that looks like a path or URL as a file: a FIFO or device there would stall
+  the shell's shared image loader. Such an id now gets the generic app icon.
 - **Scratchpad windows count.** Omarchy's dock leaves windows on special
   workspaces out. Here they get dots like any other, and clicking the icon
   opens the scratchpad with that window focused; clicking another app closes
@@ -155,8 +160,9 @@ saves screenshots of the app grid before and after a search:
 tests/app-grid.sh foot
 ```
 
-It checks that the dock shows only on the monitor in `monitors`, that the grid
-opens there, and that the dock loaded Omarchy's app library.
+It checks that the dock shows only on the monitor in `monitors`, that a
+minimized window whose app id names a FIFO doesn't block the dock, that the
+grid opens there, and that the dock loaded Omarchy's app library.
 `tests/hidden-desktop.sh` does the setup: a second Hyprland with its own
 D-Bus, drawing only to two virtual monitors (`TEST-A`, `TEST-B`) from a window
 on a hidden special workspace, with the dock running in a Quickshell of its own

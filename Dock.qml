@@ -189,7 +189,9 @@ Item {
 
   function iconFor(item) {
     var entry = entryFor(item)
-    var icon = entry && entry.icon ? entry.icon : (item ? item.key : "")
+    // Local change: a key that is a window's app id passes through
+    // iconNameForAppId (DockModel.js).
+    var icon = entry && entry.icon ? entry.icon : DockModel.iconNameForAppId(item ? item.key : "")
     return root.appLibrary ? root.appLibrary.iconSource(icon) : Quickshell.iconPath(icon, true)
   }
 

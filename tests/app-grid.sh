@@ -33,6 +33,19 @@ sleep 4
 
 check "The dock shows only on the monitor in dock.monitors" TEST-A "$(monitors_with omarchy-dock)"
 
+# A window's app id is up to the app, and a minimized window shows in the dock
+# even without a desktop entry. An id naming a file that blocks when opened
+# (here a FIFO nobody writes to) must not be read as the window's icon. A thread
+# blocked opening a FIFO waits in the kernel's wait_for_partner.
+fifo=$(mktemp -u /tmp/side-dock-fifo.XXXXXX)
+mkfifo "$fifo"
+trap '"$desktop" stop >/dev/null; timeout 1 sh -c "echo > $fifo"; rm -f "$fifo"' EXIT
+d hyprctl dispatch "hl.dsp.exec_cmd(\"foot --app-id $fifo -e sh -c 'sleep 600'\", { workspace = \"special:minimized silent\" })" >/dev/null
+sleep 2
+shell_pid=$(pgrep -f "^quickshell -p $XDG_RUNTIME_DIR/side-dock-test/shell/shell.qml" | head -1)
+check "A minimized window whose app id names a blocking file doesn't block the dock" 0 \
+  "$(cat /proc/"$shell_pid"/task/*/wchan 2>/dev/null | tr '\0' '\n' | grep -c wait_for_partner)"
+
 "$desktop" dock apps >/dev/null
 sleep 1.5
 check "The app grid opens on that monitor" TEST-A "$(monitors_with omarchy-dock-apps)"

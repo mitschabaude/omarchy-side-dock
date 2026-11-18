@@ -189,3 +189,15 @@ if (typeof module !== "undefined") {
     pickWindow: pickWindow
   }
 }
+
+// Local change: the icon for a window with no desktop entry (a minimized one
+// shows in the dock regardless) is its app id only if that can only be an icon
+// name. The id is whatever the app chose, and the app library reads a path or
+// URL as a file, which could be one that blocks when opened (a FIFO, a device)
+// and stall the shell's shared image loader. Icon names have no slashes or
+// colons; anything else gets the generic icon.
+function iconNameForAppId(appId) {
+  var id = String(appId || "")
+  if (id.length === 0 || /[\/:]/.test(id)) return "application-x-executable"
+  return id
+}
