@@ -143,8 +143,10 @@ Item {
   function launch(index) {
     var entry = root.apps[index]
     if (!entry || !root.appLibrary) return
+    // Closing the grid clears its screen.
+    var screen = panel.screen
     root.close()
-    if (root.dock) root.dock.launchEntry(entry, panel.screen)
+    if (root.dock) root.dock.launchEntry(entry, screen)
     else root.appLibrary.launch(entry.id, root.appLibrary.entryName(entry))
   }
 
@@ -461,8 +463,9 @@ Item {
           text: Commons.I18n.t("dock.open")
           onTriggered: {
             var entry = menu.entry
+            var screen = panel.screen
             root.close()
-            if (entry && root.dock) root.dock.launchEntry(entry, panel.screen)
+            if (entry && root.dock) root.dock.launchEntry(entry, screen)
             else if (entry && root.appLibrary) root.appLibrary.launch(entry.id, root.appLibrary.entryName(entry))
           }
         }

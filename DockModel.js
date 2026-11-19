@@ -72,6 +72,30 @@ function claimingEntryId(appId, entries) {
   return ""
 }
 
+// Local change: the window classes (app ids) an entry claims, lowercased, the
+// way the dock matches windows to entries: the desktop id and StartupWMClass
+// (DesktopEntries.heuristicLookup, which ignores case), the app id an entry
+// hands its terminal with --app-id=, and org.omarchy.<command> for an entry run
+// in a terminal (claimingEntryId).
+function windowClassesFor(entry) {
+  var classes = []
+  function add(value) {
+    var id = String(value || "").toLowerCase()
+    if (id && classes.indexOf(id) < 0) classes.push(id)
+  }
+  add(entry.id)
+  add(entry.startupClass)
+  var words = String(entry.execString || "").split(/\s+/)
+  for (var i = 0; i < words.length; i++) {
+    if (words[i].indexOf("--app-id=") === 0) add(words[i].slice("--app-id=".length))
+  }
+  if (entry.runInTerminal) {
+    var program = String((entry.command || [])[0] || "")
+    if (program) add("org.omarchy." + program.slice(program.lastIndexOf("/") + 1))
+  }
+  return classes
+}
+
 // Pinned apps come first, in pin order, whether or not they run. Running apps
 // that are not pinned follow in the order their first window appeared. Each
 // window is { key, hasEntry, workspaceId, ... } where key is the desktop id of

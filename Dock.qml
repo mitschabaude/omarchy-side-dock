@@ -208,37 +208,24 @@ Item {
   }
 
   // Local change: with dock.emptyWorkspace, an app started from the dock or
-  // its app grid while none of its windows is open anywhere first switches the
-  // screen to an empty workspace, so the app opens there.
+  // its app grid while none of its windows is open anywhere opens its window on
+  // an empty workspace of the screen it was started from. empty-workspace.lua
+  // does the move in Hyprland, as the window opens; the dock reports the launch
+  // to it first, over Hyprland's socket.
   readonly property bool emptyWorkspace: dockConfig.emptyWorkspace === true
+  readonly property string emptyWorkspaceLua: decodeURIComponent(String(Qt.resolvedUrl("empty-workspace.lua")).replace(/^file:\/\//, ""))
 
   function launchEntry(entry, screen) {
     if (!entry) return
     var item = root.itemFor(entry.id)
-    var monitor = Hyprland.monitorFor(screen)
-    if (root.emptyWorkspace && monitor && (!item || item.windows.length === 0)) root.showEmptyWorkspace(monitor.name)
+    var monitor = screen ? Hyprland.monitorFor(screen) : null
+    if (root.emptyWorkspace && monitor && (!item || item.windows.length === 0)) {
+      var classes = DockModel.windowClassesFor(entry).map(function(id) { return JSON.stringify(id) })
+      Hyprland.dispatch("function() "
+        + "if not side_dock_empty_workspace then dofile(" + JSON.stringify(root.emptyWorkspaceLua) + ") end; "
+        + "side_dock_empty_workspace.launch({ " + classes.join(", ") + " }, " + JSON.stringify(monitor.name) + ") end")
+    }
     root.appLibrary.launch(entry.id, entry.name)
-  }
-
-  // Hides a special workspace (the scratchpad) shown on the monitor, then stays
-  // on the workspace in front if it is empty, or goes to the monitor's lowest
-  // empty workspace slot (Omarchy's o.workspaces). With every slot taken, the
-  // app opens where the user is.
-  function showEmptyWorkspace(monitorName) {
-    root.dispatchSteady("local monitor = hl.get_monitor(" + JSON.stringify(monitorName) + "); "
-      + "if not monitor then return end; "
-      + "local function empty(workspace) "
-      + "if not workspace then return true end; "
-      + "for _, window in ipairs(workspace:get_windows()) do if window.mapped then return false end end; "
-      + "return true end; "
-      + "local special = monitor.active_special_workspace; "
-      + "if special then hl.dispatch(hl.dsp.workspace.toggle_special(special.name:sub(#\"special:\" + 1))) end; "
-      + "if empty(monitor.active_workspace) then "
-      + "if not monitor.focused then hl.dispatch(hl.dsp.focus({ monitor = monitor.name })) end; "
-      + "return end; "
-      + "for slot = 1, o.workspaces.slots do "
-      + "if empty(hl.get_workspace(o.workspaces.workspace_id(monitor, slot))) then "
-      + "hl.dispatch(o.workspaces.focus(slot, monitor.name)); return end end")
   }
 
   function activate(item, screen) {
