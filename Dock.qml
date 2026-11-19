@@ -197,24 +197,54 @@ Item {
     return root.appLibrary ? root.appLibrary.iconSource(icon) : Quickshell.iconPath(icon, true)
   }
 
-  function launch(item) {
+  // The screen is the one the dock or app grid was clicked on.
+  function launch(item, screen) {
     var entry = entryFor(item)
     if (!entry) return
     var next = Object.assign(Object.create(null), root.launches)
     next[item.key] = { at: Date.now(), windows: item.windows.length }
     root.launches = next
-    root.launchEntry(entry)
+    root.launchEntry(entry, screen)
   }
 
-  function launchEntry(entry) {
+  // Local change: with dock.emptyWorkspace, an app started from the dock or
+  // its app grid while none of its windows is open anywhere first switches the
+  // screen to an empty workspace, so the app opens there.
+  readonly property bool emptyWorkspace: dockConfig.emptyWorkspace === true
+
+  function launchEntry(entry, screen) {
     if (!entry) return
+    var item = root.itemFor(entry.id)
+    var monitor = Hyprland.monitorFor(screen)
+    if (root.emptyWorkspace && monitor && (!item || item.windows.length === 0)) root.showEmptyWorkspace(monitor.name)
     root.appLibrary.launch(entry.id, entry.name)
   }
 
-  function activate(item) {
+  // Hides a special workspace (the scratchpad) shown on the monitor, then stays
+  // on the workspace in front if it is empty, or goes to the monitor's lowest
+  // empty workspace slot (Omarchy's o.workspaces). With every slot taken, the
+  // app opens where the user is.
+  function showEmptyWorkspace(monitorName) {
+    root.dispatchSteady("local monitor = hl.get_monitor(" + JSON.stringify(monitorName) + "); "
+      + "if not monitor then return end; "
+      + "local function empty(workspace) "
+      + "if not workspace then return true end; "
+      + "for _, window in ipairs(workspace:get_windows()) do if window.mapped then return false end end; "
+      + "return true end; "
+      + "local special = monitor.active_special_workspace; "
+      + "if special then hl.dispatch(hl.dsp.workspace.toggle_special(special.name:sub(#\"special:\" + 1))) end; "
+      + "if empty(monitor.active_workspace) then "
+      + "if not monitor.focused then hl.dispatch(hl.dsp.focus({ monitor = monitor.name })) end; "
+      + "return end; "
+      + "for slot = 1, o.workspaces.slots do "
+      + "if empty(hl.get_workspace(o.workspaces.workspace_id(monitor, slot))) then "
+      + "hl.dispatch(o.workspaces.focus(slot, monitor.name)); return end end")
+  }
+
+  function activate(item, screen) {
     if (!item) return
     if (item.windows.length === 0) {
-      root.launch(item)
+      root.launch(item, screen)
       return
     }
     var monitor = Hyprland.focusedMonitor
@@ -248,21 +278,25 @@ Item {
     }
     steps.push("hl.dsp.focus({ " + target + " })")
     steps.push("hl.dsp.window.alter_zorder({ mode = \"top\", " + target + " })")
-    // Local change: send the Lua dispatches over Hyprland's socket in-process
-    // instead of spawning a login shell running hyprctl for every click. They
-    // run as one Lua function with cursor warps off, so the pointer stays on
-    // the dock instead of jumping to the focused window or workspace; the
-    // warp settings are restored even if a step fails.
-    Hyprland.dispatch("function() "
-      + "local saved = { no_warps = hl.get_config(\"cursor.no_warps\"), "
-      + "warp_on_change_workspace = hl.get_config(\"cursor.warp_on_change_workspace\") }; "
-      + "hl.config({ cursor = { no_warps = true, warp_on_change_workspace = 0 } }); "
-      + "pcall(function() " + steps.map(function(step) { return "hl.dispatch(" + step + ")" }).join("; ") + " end); "
-      + "hl.config({ cursor = saved }) end")
+    root.dispatchSteady(steps.map(function(step) { return "hl.dispatch(" + step + ")" }).join("; "))
     if (after.length > 0) {
       afterBringForward.steps = after
       afterBringForward.restart()
     }
+  }
+
+  // Local change: run Lua over Hyprland's socket in-process instead of
+  // spawning a login shell running hyprctl for every click. The body runs as
+  // one function with cursor warps off, so the pointer stays on the dock
+  // instead of jumping to the focused window or workspace; the warp settings
+  // are restored even if a step fails.
+  function dispatchSteady(body) {
+    Hyprland.dispatch("function() "
+      + "local saved = { no_warps = hl.get_config(\"cursor.no_warps\"), "
+      + "warp_on_change_workspace = hl.get_config(\"cursor.warp_on_change_workspace\") }; "
+      + "hl.config({ cursor = { no_warps = true, warp_on_change_workspace = 0 } }); "
+      + "pcall(function() " + body + " end); "
+      + "hl.config({ cursor = saved }) end")
   }
 
   Timer {

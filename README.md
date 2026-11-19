@@ -41,7 +41,8 @@ dock:
   "autohide": false,
   "monitors": ["DP-1"],
   "pinned": ["firefox.desktop", "slack.desktop", "org.telegram.desktop.desktop"],
-  "labels": { "com.t3tools.T3Code": "T3 Code" }
+  "labels": { "com.t3tools.T3Code": "T3 Code" },
+  "emptyWorkspace": true
 }
 ```
 
@@ -54,6 +55,7 @@ dock:
   Read the current list with `omarchy dock pinned`.
 - `labels` maps a desktop id to the name its hover label shows, for apps whose
   own name is unhelpful.
+- `emptyWorkspace`: an app started from the dock or its app grid while none of its windows is open anywhere opens on an empty workspace. The dock first hides the scratchpad if it is open, then stays on the workspace in front if that is empty, or goes to the monitor's lowest empty workspace. Apps started any other way, and further windows of a running app, open where you are. Off unless set to `true`.
 
 The dock picks up changes to the file right away.
 
@@ -137,6 +139,7 @@ shows them all.
   workspaces out. Here they get dots like any other, and clicking the icon
   opens the scratchpad with that window focused; clicking another app closes
   the scratchpad again.
+- **Empty workspaces for new apps.** The `emptyWorkspace` setting. The dock sends the switch as Lua over Hyprland's socket, like its focus steps, using Omarchy's per-monitor workspace slots (`o.workspaces`), and then starts the app.
 
 ## Following Omarchy's dock
 
@@ -169,6 +172,7 @@ tests/app-grid.sh foot
 It checks that the dock shows only on the monitor in `monitors`, that a
 minimized window whose app id names a FIFO doesn't block the dock, nor one
 whose app id is `constructor` break it, that the grid opens there, and that the dock loaded Omarchy's app library.
+`tests/empty-workspace.sh` checks the `emptyWorkspace` setting through the app grid: an app with no window opens on the lowest empty workspace, also from the open scratchpad, which it hides, and an app with a window open starts where you are.
 `tests/hidden-desktop.sh` does the setup: a second Hyprland with its own
 D-Bus, drawing only to two virtual monitors (`TEST-A`, `TEST-B`) from a window
 on a hidden special workspace, with the dock running in a Quickshell of its own

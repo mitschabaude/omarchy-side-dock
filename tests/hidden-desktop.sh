@@ -1,7 +1,7 @@
 #!/bin/bash
 # A private Hyprland for testing the dock without touching the desktop in use:
 # it draws to two virtual monitors nobody sees, runs with its own D-Bus session,
-# and loads only a minimal config. The dock runs in it in a Quickshell of its
+# and loads only a minimal config plus Omarchy's per-monitor workspaces. The dock runs in it in a Quickshell of its
 # own, not the Omarchy shell, so it gets no shell API, much as a clone gets
 # little of it. Its host window sits on a hidden special workspace and never
 # takes focus.
@@ -54,18 +54,26 @@ EOF
 
   cat > "$state/hyprland.lua" <<EOF
 hl.config({
-  misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
+  -- As in Omarchy, a window opens on the workspace in front, not on the one
+  -- its launcher was started on.
+  misc = { disable_hyprland_logo = true, disable_splash_rendering = true, initial_workspace_tracking = 0 },
   ecosystem = { no_update_news = true, no_donation_nag = true },
 })
 -- Draw only on the virtual monitors, never into the host window.
 hl.monitor({ output = "WAYLAND-1", disabled = true })
 hl.monitor({ output = "TEST-A", mode = "1920x1080", position = "0x0", scale = 1 })
 hl.monitor({ output = "TEST-B", mode = "1920x1080", position = "1920x0", scale = 1 })
+-- Omarchy's per-monitor workspaces (o.workspaces), which the dock's
+-- emptyWorkspace setting uses. Its state goes to XDG_STATE_HOME, which is the
+-- test's own.
+package.path = "$omarchy/?.lua;" .. package.path
+require("default.hypr.helpers")
+require("default.hypr.monitor-workspaces")
 EOF
 
   local before
   before=$(hyprctl instances -j | jq -c '[.[].instance]')
-  hyprctl dispatch "hl.dsp.exec_cmd(\"dbus-run-session -- Hyprland --config $state/hyprland.lua > $state/hyprland.log 2>&1\", { workspace = \"special:side-dock-test silent\", no_initial_focus = true })" >/dev/null
+  hyprctl dispatch "hl.dsp.exec_cmd(\"env XDG_STATE_HOME=$state/state dbus-run-session -- Hyprland --config $state/hyprland.lua > $state/hyprland.log 2>&1\", { workspace = \"special:side-dock-test silent\", no_initial_focus = true })" >/dev/null
 
   local instance=""
   for _ in $(seq 100); do

@@ -545,8 +545,8 @@ PanelWindow {
         return
       }
       window.closeMenu()
-      if (event.button === Qt.MiddleButton) window.dock.launch(appSlot.modelData)
-      else window.dock.activate(appSlot.modelData)
+      if (event.button === Qt.MiddleButton) window.dock.launch(appSlot.modelData, window.screen)
+      else window.dock.activate(appSlot.modelData, window.screen)
     }
 
     // Local change: the app holding focus, and the one under the pointer, get
@@ -781,7 +781,7 @@ PanelWindow {
         visible: menu.hasEntry && menu.running
         text: Commons.I18n.t("dock.newWindow")
         onTriggered: {
-          window.dock.launch(menu.item)
+          window.dock.launch(menu.item, window.screen)
           window.closeMenu()
         }
       }
